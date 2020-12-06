@@ -7,9 +7,12 @@ contract Wikipedia {
 
   uint[] public ids;
   mapping (uint => Article) public articlesById;
-  mapping (uint => uint) public nbModifById;
-  mapping (uint => mapping(uint => Article)) public historyById;
-  
+
+  // liste du nombre de modifications de chaque article
+  mapping (uint => uint) public nbModifsById;
+  // liste de chaque version de chaque article
+  mapping (uint => (mapping uint => Article)) public historyById;
+
   constructor() public {
     uint index = 0;
     ids.push(index);
@@ -27,37 +30,37 @@ contract Wikipedia {
 
   // Write your code here.
 
-  // ajoute un article dans la liste, son index dans la liste des index
-  function addArticle(string memory texte) public view {
-    index++;
+  // ajout d'un article dans la liste d'article
+  // et de son id dans la liste des id
+  function addNewArticle(string memory content) public {
+    uint index = ids.length;
     ids.push(index);
-    Article memory newArticle = Article(texte);
+    Article memory newArticle = Article(content);
     articlesById[index] = newArticle;
   }
 
-  // met a jour un article dans la liste
-  function updateArticle(uint id, string memory texte) public view {
+  // mise a jour d'un article
+  function updateArticle(uint index, string memory content) public {
+    Article memory updatedArticle = Article(content);
 
-    // augmentation de 1 du nombre de modifications de l'article
-    uint i = nbModifById[id];
-    nbModifById[id]++;
-    // ajout de la version avant modification de l'article
-    // dans la liste des anciennes versions
-    historyById[id][i] = articlesById[id];
+    // ajout de l'ancienne version dans l'historique
+    historyById[id][nbModifsById[index]] = articlesById[index];
+    nbModifsById[index] += 1;
 
-    // remplacement de l'article dans la liste
-    Article memory article = Article(texte);
-    articlesById[id] = article;
+    // mise a jour de l'article dans la liste d'articles
+    articlesById[index] = updatedArticle;
   }
 
-  // donne le nombre de fois qu'un article a ete modifie
-  function getNbModif(uint id) public view returns (uint i){
-    return nbModifById[id];
+
+  function getNbModifs(uint index) public returns(uint memory){
+    return nbModifsById[index];
   }
 
-  // donne la version de l'article apres i modifications
-  function getVersion(uint id, uint i) public view returns(string memory){
-    return historyById[id][i].content;
+  function getVersionById(uint id, uint ver) public returns(string memory){
+    return historyById[id][ver].content;
   }
 
+  function getAllVersionsById(uint id) public returns(Article[] memory){
+    return historyById[id];
+  }
 }

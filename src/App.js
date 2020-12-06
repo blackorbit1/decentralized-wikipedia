@@ -6,20 +6,24 @@ import styles from './App.module.css'
 import MediumEditor from 'medium-editor'
 import 'medium-editor/dist/css/medium-editor.css'
 import 'medium-editor/dist/css/themes/default.css'
+import DOMPurify from 'dompurify';
 
 const NewArticle = () => {
   const [editor, setEditor] = useState(null)
   useEffect(() => {
     setEditor(new MediumEditor(`.${styles.editable}`))
   }, [setEditor])
-  const dispatch = useDispatch()
-  const createArticle = () => dispatch(Ethereum.createArticle(editor))
+  const handleSubmit = () => {
+    if(contract){
+      contract.methods.addNewArticle(DOMPurify.sanitize(editor.getContent())).send()
+    }
+  }
   return (
     <div>
       <div>
         <Home/><br/><br/>
       </div>
-      <form onSubmit={createArticle}>
+      <form onSubmit={handleSubmit}>
         <div className={styles.subTitle}>New article</div>
         <div className={styles.mediumWrapper}>
           <textarea className={styles.editable} />
@@ -40,134 +44,128 @@ const Home = () => {
   )
 }
 
-//affichage de la version actuelle d'un article
-const Article = ({ id, article }) => {
-  const update = "update/"+id;
-  const historique = "history/"+id;
-  return (
-    <div>
-      <div>
-        <Home/><br/><br/>
-      </div>
-      <div>
-        Article {id}
-        <br/><br/>
-      </div>
-      <div>
-        <Link to={update}>Update</Link>
-        <Link to={historique}>History</Link>
-        <br/>
-        {article}
-      </div>
-
-    </div>
-  )
-}
-
-//affichage d'une ancienne version d'un article
-const ArticleOld = ({id, article }) => {
-  return (
-    <div>
-      <div>
-        <Home/><br/><br/>
-      </div>
-      <div>
-        Version {id}, 
-        <br/><br/>
-      </div>
-      <div>
-        {article}
-      </div>
-
-    </div>
-  )
-}
-
-
 const AllArticles = () => {
   const [articles, setArticles] = useState([])
   const contract = useSelector(({ contract }) => contract)
-  const articles1 = useSelector (({ articles }) => articles)
   useEffect(() => {
     if (contract) {
-      var liste = []
-      var la1 = articles1.length
-      for(var i = 0; i < la1; i++){
-        liste.push(<Article id={articles1[i].id} article={articles1[i].article}/>)
-      }
+      contract.methods.getAllIds().call().then(ids => {
+        ids.forEach ( i => {
+          contract.methods.articleContent(i).call().then(content => {
+            setArticles(articles => [...articles, content])
+          })
+        })
+      })
     }
-    setArticles(liste)
-  }, [setArticles, articles1])
-  return (
-    <div>
-      <div>
-        <Home/><br/><br/>
-      </div>
-      <div>
-        {articles}
-      </div>
-    </div>
-  )
-}
-
-const ArticleVersions = () => {
-  let { id } = useParams();
-  const [articles, setArticles] = useState([])
-  const versions = useSelector(({ versionsE }) => versionsE)
-  useEffect(() => {
-    var liste = []
-    for(var i = 0; i < versions.length; i++){
-      if(versions[i].id == id){
-        for(var j = 0; j < versions[i].articlesVersion.length; j++) {
-          liste.push(<ArticleOld id={j} article={versions[i].articlesVersion[j]} />)
-        }
-      }
-    }
-    setArticles(liste)
-  }, [setArticles, versions])
-
+  }, [contract, setArticles]);
   return (
   <div>
-    <Home/>
     <div>
-      {articles}
+      <Home/><br/><br/>
+    </div>
+    <div>
+    {articles.map((article,index) => {
+      return <div className={styles.articleWrapper} 
+                    key={index}> Article : {index} : 
+                    <Link to={"/article/update/" + index}>Update</Link>
+                    <Link to={"/article/versions/" + index}>History</Link>
+                <div className={styles.articleContent} 
+                      dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(article)}} />
+            </div>}
+          )}
+
     </div>
   </div>
   )
 }
 
+const Article = () => {
+  const contract = useSelector(({ contract }) => contract);
+  const { id } = useParams();
+  const [content, setContent] = useState(null);
+
+  if (contract) {
+    contract.methods.articleContent(id).call().then((res) => {
+      if (res !== "")
+        setContent(res);
+      else
+        setContent("Article of id " + id + " doesn't exist");
+    })
+  }
+
+  return (
+    <div id="article" dangerouslySetInnerHTML={{__html: DOMPurify.sanitize("<h5>Article [" + id + "]</h5>" + content )}} />
+  )
+}
 
 const UpdateArticle = () => {
-  let { id } = useParams();
   const [editor, setEditor] = useState(null)
-  const dispatch = useDispatch()
+  const contract = useSelector(({ contract }) => contract)
+  const { id } = useParams();
 
   useEffect(() => {
-    setEditor(new MediumEditor(`.${styles.editable}`))
-  }, [setEditor])
+    if (contract) {
+      contract.methods.articleContent(id).call().then((res) => {
+        const editor = new MediumEditor(`.${styles.editable}`);
+        editor.setContent(res);
+        setEditor(editor);
+      });
+    }
 
-  const updateArticle = () => dispatch(Ethereum.updateArticle(id,(editor == null ? article : editor)))
-
-  const articles1 = useSelector(({ articles }) => articles)
-  const history = useSelector(({ versionsE }) => versionsE)
-  var article = "";
-
-  for(var i = 0; i < articles1.length; i++){
-    if(articles1[i].id === id) article = articles1[i].article
+  }, [setEditor, contract, id]);
+  const handleSubmit = () => {
+    if(contract){
+      contract.methods.updateArticle(id, DOMPurify.sanitize(editor.getContent())).send()
+    }
   }
   return (
     <div>
       <div>
         <Home/><br/><br/>
       </div>
-      <form onSubmit={updateArticle}>
+      <form onSubmit={handleSubmit}>
         <div className={styles.subTitle}>Update article</div>
         <div className={styles.mediumWrapper}>
-          <textarea className={styles.editable} defaultValue={article}/>
+          <textarea className={styles.editable} >
+            {contract.methods.articleContent(id).call()}
+          </textarea>
         </div>
         <input type="submit" value="Submit" />
       </form>
     </div>
+  )
+
+}
+
+// affiche l'historique de maniere similaire a AllArticles
+const History = () => {
+  const contract = useSelector(({ contract }) => contract);
+  const { id } = useParams();
+  const [content, setArticles] = useState(null);
+  useEffect(() => {
+    if (contract) {
+      contract.methods.getAllVersionsById().call().then(ids => {
+        ids.forEach ( i => {
+            setArticles(articles => [...articles, i.content])
+        })
+      })
+    }
+  }, [contract, setArticles]);
+  return (
+  <div>
+    <div>
+      <Home/><br/><br/>
+    </div>
+    <div>
+    {articles.map((article,index) => {
+      return <div className={styles.articleWrapper} 
+                    key={index}> Version : {index} : 
+                <div className={styles.articleContent} dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(article)}} />
+            </div>}
+          )}
+
+    </div>
+  </div>
   )
 }
 
@@ -193,11 +191,18 @@ const App = () => {
         </Route>
         <Route path="/article/all">
           <AllArticles />
-        </Route>     
-        <Route path="/article/update/:id" children={<UpdateArticle />} />
-        <Route path="/article/history/:id" children={<ArticleVersions />} />
-        <Route>   
-         <NotFound />
+        </Route>
+        <Route path="/article/update/:id">
+          <UpdateArticle />
+        </Route>
+        <Route path="/article/article/:id">
+          <Article />
+        </Route>
+        <Route path="/article/versions/:id">
+          <History />
+        </Route>
+        <Route>
+          <NotFound />
         </Route>
       </Switch>
     </div>
